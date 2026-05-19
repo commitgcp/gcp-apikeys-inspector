@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Commit GCP API Keys Report - {{ org.org_id }}</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-soft: #f8fafc;
+    --ink: #111318;
+    --muted: #68707d;
+    --border: #dde1e7;
+    --border-strong: #c8ced8;
+    --commit-red: #ed1c24;
+    --commit-red-dark: #b60d14;
+    --charcoal: #17191d;
+    --focus: #2563eb;
+
+    --sev-critical-bg: #fee2e2;
+    --sev-critical-fg: #b91c1c;
+    --sev-high-bg: #ffedd5;
+    --sev-high-fg: #c2410c;
+    --sev-medium-bg: #fef3c7;
+    --sev-medium-fg: #a16207;
+    --sev-info-bg: #dbeafe;
+    --sev-info-fg: #1d4ed8;
+    --sev-ok-bg: #dcfce7;
+    --sev-ok-fg: #15803d;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.5 Inter, Montserrat, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  }
+  button, input, select { font: inherit; }
+  a { color: var(--commit-red-dark); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .page { max-width: 1440px; margin: 0 auto; padding: 28px; }
+  .shell { background: var(--surface); border: 1px solid var(--border); }
+
+  .hero {
+    background: var(--charcoal);
+    color: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 22px;
+  }
+  .hero-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 22px 28px;
+    border-bottom: 1px solid rgba(255,255,255,.14);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 220px;
+  }
+  .brand img { display: block; width: 118px; max-height: 44px; object-fit: contain; }
+  .brand-fallback {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: .04em;
+  }
+  .hero-kicker {
+    color: #cdd3dc;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .14em;
+  }
+  .hero-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(280px, .9fr);
+    gap: 28px;
+    padding: 28px;
+  }
+  .hero h1 {
+    margin: 0 0 10px;
+    font-size: 34px;
+    line-height: 1.08;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+  .hero h1 .dot { color: var(--commit-red); }
+  .hero .summary-text {
+    color: #dce1e8;
+    max-width: 760px;
+    margin: 0;
+  }
+  .meta-panel {
+    background: rgba(255,255,255,.06);
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .meta-row {
+    display: grid;
+    grid-template-columns: 88px 1fr;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255,255,255,.09);
+  }
+  .meta-row:last-child { border-bottom: 0; }
+  .meta-row .k { color: #aeb7c4; font-size: 12px; text-transform: uppercase; }
+  .meta-row .v { color: #fff; min-width: 0; overflow-wrap: anywhere; }
+
+  section { margin-bottom: 22px; }
+  .section-title {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 0 10px;
+  }
+  h2 {
+    margin: 0;
+    font-size: 17px;
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+  .count { color: var(--muted); font-weight: 500; }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(120px, 1fr));
+    gap: 10px;
+  }
+  .metric {
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    color: var(--ink);
+    min-height: 96px;
+  }
+  button.metric { cursor: pointer; }
+  button.metric:hover { border-color: var(--border-strong); box-shadow: 0 8px 24px rgba(17,19,24,.07); }
+  button.metric:focus-visible, .toolbar input:focus-visible, .toolbar select:focus-visible, .small-action:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .metric .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  .metric .value { font-size: 30px; line-height: 1; font-weight: 800; margin-top: 9px; }
+  .metric .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .metric.sev-CRITICAL .value { color: var(--sev-critical-fg); }
+  .metric.sev-HIGH .value { color: var(--sev-high-fg); }
+  .metric.sev-MEDIUM .value { color: var(--sev-medium-fg); }
+  .metric.sev-INFO .value { color: var(--sev-info-fg); }
+  .metric.sev-OK .value { color: var(--sev-ok-fg); }
+
+  .severity-bar {
+    display: flex;
+    height: 12px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--border);
+    margin: 14px 0 0;
+  }
+  .severity-bar > div { min-width: 5px; }
+  .severity-bar .sev-CRITICAL { background: var(--sev-critical-fg); }
+  .severity-bar .sev-HIGH { background: var(--sev-high-fg); }
+  .severity-bar .sev-MEDIUM { background: var(--sev-medium-fg); }
+  .severity-bar .sev-INFO { background: var(--sev-info-fg); }
+  .severity-bar .sev-OK { background: var(--sev-ok-fg); }
+
+  .insight-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(300px, .7fr);
+    gap: 12px;
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .panel h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    line-height: 1.25;
+  }
+  .top-findings ul { margin: 0; padding: 0; list-style: none; }
+  .top-findings li { padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .top-findings li:last-child { border-bottom: 0; }
+  .finding-line { margin-top: 4px; color: var(--muted); }
+  .pivot-list { display: grid; gap: 8px; }
+  .pivot {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    color: var(--ink);
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .pivot:hover { border-color: var(--border-strong); }
+  .pivot span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pivot .pill { background: #fff; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; color: var(--muted); }
+
+  .toolbar {
+    display: grid;
+    grid-template-columns: minmax(260px, 1.4fr) repeat(5, minmax(150px, .7fr));
+    gap: 8px;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .toolbar input, .toolbar select {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+    padding: 8px 10px;
+    min-height: 38px;
+  }
+  .toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .toolbar-actions select {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+    min-height: 34px;
+    padding: 6px 10px;
+  }
+  .small-action {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: #fff;
+    color: var(--ink);
+    min-height: 34px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  .small-action:hover { border-color: var(--border-strong); }
+  .hint { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+  .table-wrap {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  table.keys {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1080px;
+  }
+  table.keys th, table.keys td {
+    padding: 11px 12px;
+    text-align: left;
+    vertical-align: top;
+    border-bottom: 1px solid var(--border);
+  }
+  table.keys thead th {
+    background: #f0f2f5;
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    font-weight: 800;
+  }
+  tr.summary { cursor: pointer; }
+  tr.summary:hover { background: #fafbfc; }
+  tr.details { display: none; background: #fbfcfe; }
+  tr.details td { padding: 16px 18px 18px; border-bottom: 2px solid var(--border-strong); }
+  tr.group-row td {
+    background: #202329;
+    color: #fff;
+    font-weight: 700;
+    border-bottom: 0;
+    padding: 9px 12px;
+  }
+  .group-count { color: #cfd6df; font-weight: 500; margin-left: 8px; }
+  .key-name { font-weight: 700; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .tiny { font-size: 11px; }
+  .nowrap { white-space: nowrap; }
+  .wrap-anywhere { overflow-wrap: anywhere; }
+
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    white-space: nowrap;
+  }
+  .badge.sev-CRITICAL { background: var(--sev-critical-bg); color: var(--sev-critical-fg); }
+  .badge.sev-HIGH { background: var(--sev-high-bg); color: var(--sev-high-fg); }
+  .badge.sev-MEDIUM { background: var(--sev-medium-bg); color: var(--sev-medium-fg); }
+  .badge.sev-INFO { background: var(--sev-info-bg); color: var(--sev-info-fg); }
+  .badge.sev-OK { background: var(--sev-ok-bg); color: var(--sev-ok-fg); }
+  .badge.deleted { background: #eceff3; color: #4b5563; margin-left: 6px; }
+
+  .chip {
+    display: inline-block;
+    font-size: 11px;
+    line-height: 1.25;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 8px;
+    margin: 0 4px 5px 0;
+    background: #eef1f5;
+    color: var(--ink);
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+  }
+  button.chip { cursor: pointer; }
+  button.chip:hover { border-color: var(--border-strong); }
+  .chip.api { background: #e0f2fe; border-color: #bae6fd; }
+  .chip.browser { background: #fef3c7; border-color: #fde68a; }
+  .chip.server { background: #fee2e2; border-color: #fecaca; }
+  .chip.android { background: #dcfce7; border-color: #bbf7d0; }
+  .chip.ios { background: #ede9fe; border-color: #ddd6fe; }
+  .chip.unrestricted { background: var(--sev-critical-bg); color: var(--sev-critical-fg); border-color: #fca5a5; font-weight: 700; }
+
+  .details-grid {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 6px 14px;
+    margin-bottom: 14px;
+  }
+  .details-grid .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .details-grid .v { min-width: 0; overflow-wrap: anywhere; }
+  .findings-list { margin: 0 0 14px; padding-left: 18px; }
+  .findings-list li { margin-bottom: 5px; }
+  pre {
+    background: #111318;
+    color: #dbeafe;
+    border-radius: 8px;
+    padding: 13px;
+    overflow: auto;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    margin: 6px 0 0;
+  }
+
+  details.deleted-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  details.deleted-section > summary {
+    cursor: pointer;
+    padding: 12px 16px;
+    font-weight: 700;
+    list-style: none;
+  }
+  details.deleted-section > summary::-webkit-details-marker { display: none; }
+  details.deleted-section .inner { padding: 0 16px 16px; }
+  .empty {
+    background: var(--surface);
+    border: 1px dashed var(--border-strong);
+    border-radius: 8px;
+    padding: 28px;
+    text-align: center;
+    color: var(--muted);
+  }
+  footer {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+    margin: 28px 0 6px;
+  }
+  code {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (max-width: 1100px) {
+    .cards { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
+    .hero-main, .insight-grid { grid-template-columns: 1fr; }
+    .toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .toolbar input { grid-column: 1 / -1; }
+  }
+  @media (max-width: 680px) {
+    .page { padding: 14px; }
+    .hero-top, .hero-main { padding: 18px; }
+    .hero-top { align-items: flex-start; flex-direction: column; }
+    .hero h1 { font-size: 28px; }
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .toolbar { grid-template-columns: 1fr; position: static; }
+    .hint { width: 100%; margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hero">
+  <div class="hero-top">
+    <div class="brand">
+      {% if commit_logo_data_uri %}
+      <img src="{{ commit_logo_data_uri }}" alt="Commit logo">
+      {% else %}
+      <div class="brand-fallback">COMMIT<span class="dot">.</span></div>
+      {% endif %}
+    </div>
+    <div class="hero-kicker">Google Cloud security inventory</div>
+  </div>
+  <div class="hero-main">
+    <div>
+      <h1>GCP API Keys Report<span class="dot">.</span></h1>
+      <p class="summary-text">
+        Organization-wide inventory of active and soft-deleted Google Cloud API keys,
+        scored by restriction posture and grouped for remediation review.
+      </p>
+    </div>
+    <div class="meta-panel">
+      <div class="meta-row"><div class="k">Org</div><div class="v">{{ org.display_name or "(displayName unavailable)" }} ({{ org.org_id }})</div></div>
+      <div class="meta-row"><div class="k">Scanned</div><div class="v">{{ org.scan_time_utc }} UTC</div></div>
+      <div class="meta-row"><div class="k">Tool</div><div class="v">gcp-api-keys-discover v{{ org.tool_version }}</div></div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="section-title">
+    <h2>Executive Summary</h2>
+  </div>
+  <div class="cards">
+    <div class="metric">
+      <div class="label">Active keys</div>
+      <div class="value">{{ total_active }}</div>
+      <div class="note">Included in risk scoring</div>
+    </div>
+    <div class="metric">
+      <div class="label">Projects</div>
+      <div class="value">{{ projects_with_keys }}</div>
+      <div class="note">With active keys</div>
+    </div>
+    <div class="metric">
+      <div class="label">Soft-deleted</div>
+      <div class="value">{{ total_deleted }}</div>
+      <div class="note">Shown separately</div>
+    </div>
+    {% for sev in severity_order %}
+    <button class="metric sev-{{ sev }}" type="button" onclick="quickFilter('severity', {{ sev|tojson|forceescape }})">
+      <div class="label">{{ sev }}</div>
+      <div class="value">{{ severity_counts.get(sev, 0) }}</div>
+      <div class="note">Click to filter</div>
+    </button>
+    {% endfor %}
+  </div>
+  {% if total_active > 0 %}
+  <div class="severity-bar" title="Severity distribution across active keys">
+    {% for sev in severity_order %}
+      {% set count = severity_counts.get(sev, 0) %}
+      {% if count > 0 %}
+      <div class="sev-{{ sev }}" style="flex: {{ count }}" title="{{ sev }}: {{ count }}"></div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+{% if total_active > 0 %}
+<section>
+  <div class="insight-grid">
+    <div class="panel top-findings">
+      <h3>Priority Findings <span class="count">({{ top_findings_total }})</span></h3>
+      {% if top_findings %}
+      <ul>
+        {% for f in top_findings %}
+        <li>
+          <span class="badge sev-{{ f.severity }}">{{ f.severity }}</span>
+          <a href="#key-{{ f.uid }}">{{ f.key_display_name }}</a>
+          <span class="muted">in {{ f.project_display_name }}</span>
+          <div class="finding-line">{{ f.message }}</div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% if top_findings_total > top_findings|length %}
+      <div class="muted tiny">Showing first {{ top_findings|length }} priority findings.</div>
+      {% endif %}
+      {% else %}
+      <div class="muted">No CRITICAL or HIGH findings on active keys.</div>
+      {% endif %}
+    </div>
+    <div class="panel">
+      <h3>Fast Pivots</h3>
+      <div class="pivot-list">
+        {% for project in project_options[:6] %}
+        <button class="pivot" type="button" onclick="quickFilter('project', {{ project.value|tojson|forceescape }})">
+          <span title="{{ project.label }}">{{ project.label }}</span>
+          <span class="pill">{{ project.count }}</span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section id="active-keys">
+  <div class="section-title">
+    <h2>Active API Keys <span class="count">(<span id="visible-count">{{ total_active }}</span> of {{ total_active }})</span></h2>
+  </div>
+
+  {% if active_keys %}
+  <div class="toolbar" aria-label="Report controls">
+    <input type="search" id="filter-input" placeholder="Search name, project, API, restriction, finding" oninput="applyFilters()">
+    <select id="severity-filter" onchange="applyFilters()">
+      <option value="">All severities</option>
+      {% for sev in severity_order %}
+      <option value="{{ sev }}">{{ sev }}</option>
+      {% endfor %}
+    </select>
+    <select id="project-filter" onchange="applyFilters()">
+      <option value="">All projects</option>
+      {% for project in project_options %}
+      <option value="{{ project.value }}">{{ project.label }} ({{ project.count }})</option>
+      {% endfor %}
+    </select>
+    <select id="api-filter" onchange="applyFilters()">
+      <option value="">All APIs</option>
+      {% for api in api_options %}
+      <option value="{{ api.value }}">{{ api.label }} ({{ api.count }})</option>
+      {% endfor %}
+    </select>
+    <select id="client-filter" onchange="applyFilters()">
+      <option value="">All client restrictions</option>
+      <option value="browser">HTTP referrer</option>
+      <option value="server">Server IP</option>
+      <option value="android">Android app</option>
+      <option value="ios">iOS bundle</option>
+      <option value="{{ no_client_restriction_value }}">No client restriction</option>
+    </select>
+    <select id="group-filter" onchange="applyFilters()">
+      <option value="">No grouping</option>
+      <option value="severity">Group by severity</option>
+      <option value="project">Group by project</option>
+      <option value="api">Group by API</option>
+      <option value="client">Group by client restriction</option>
+    </select>
+  </div>
+  <div class="toolbar-actions">
+    <select id="sort-filter" onchange="applyFilters()" aria-label="Sort keys">
+      <option value="severity">Sort by severity</option>
+      <option value="project">Sort by project</option>
+      <option value="api">Sort by API</option>
+      <option value="name">Sort by key name</option>
+      <option value="created">Sort by created time</option>
+    </select>
+    <button class="small-action" type="button" onclick="resetFilters()">Reset</button>
+    <button class="small-action" type="button" onclick="expandVisible(true)">Expand visible</button>
+    <button class="small-action" type="button" onclick="expandVisible(false)">Collapse all</button>
+    <span class="hint">Click a row to expand raw restrictions and findings.</span>
+  </div>
+
+  <div class="table-wrap">
+    <table class="keys" id="keys-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Project</th>
+          <th>API targets</th>
+          <th>Client restriction</th>
+          <th>Created</th>
+          <th>Severity</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for k in active_keys %}
+        <tr
+          class="summary"
+          id="key-{{ k.uid }}"
+          data-severity="{{ k.severity }}"
+          data-severity-rank="{{ severity_rank[k.severity] }}"
+          data-project="{{ k.project_label|e }}"
+          data-api="{{ k.api_filter|e }}"
+          data-api-group="{{ k.api_group|e }}"
+          data-client="{{ k.client_filter|e }}"
+          data-client-group="{{ k.client_group|e }}"
+          data-name="{{ k.display_name|lower|e }}"
+          data-created="{{ k.create_time or '' }}"
+          data-search="{{ k.search_text|e }}"
+          onclick="toggleRow(this)">
+          <td>
+            <div class="key-name">{{ k.display_name }}</div>
+            <div class="muted mono tiny wrap-anywhere">{{ k.uid }}</div>
+          </td>
+          <td>
+            <div>{{ k.project_label }}</div>
+            <div class="muted mono tiny wrap-anywhere">
+              {{ k.project_id or "unknown-id" }}{% if k.project_number %} &middot; #{{ k.project_number }}{% endif %}
+            </div>
+            {% if k.project_error %}
+            <div class="muted tiny">name lookup: {{ k.project_error }}</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if k.api_services %}
+              {% for api in k.api_services %}
+              <button class="chip api" type="button" title="{{ api }}" onclick="event.stopPropagation(); quickFilter('api', {{ api|tojson|forceescape }})">{{ api }}</button>
+              {% endfor %}
+            {% else %}
+              <button class="chip unrestricted" type="button" onclick="event.stopPropagation(); quickFilter('api', {{ no_api_target_value|tojson|forceescape }})">No API target</button>
+            {% endif %}
+          </td>
+          <td>
+            {% if k.client_restrictions %}
+              {% for client in k.client_restrictions %}
+              <button class="chip {{ client.value }}" type="button" onclick="event.stopPropagation(); quickFilter('client', {{ client.value|tojson|forceescape }})">{{ client.label }}</button>
+              {% endfor %}
+            {% else %}
+              <button class="chip unrestricted" type="button" onclick="event.stopPropagation(); quickFilter('client', {{ no_client_restriction_value|tojson|forceescape }})">No client restriction</button>
+            {% endif %}
+            {% if k.service_account_email %}
+            <div class="muted tiny wrap-anywhere">Service account: <span class="mono">{{ k.service_account_email }}</span></div>
+            {% endif %}
+          </td>
+          <td class="mono tiny nowrap">{{ k.create_time or "unknown" }}</td>
+          <td><span class="badge sev-{{ k.severity }}">{{ k.severity }}</span></td>
+        </tr>
+        <tr class="details">
+          <td colspan="6">
+            <div class="details-grid">
+              <div class="k">Resource name</div><div class="v mono tiny">{{ k.name }}</div>
+              <div class="k">Updated</div><div class="v mono tiny">{{ k.update_time or "unknown" }}</div>
+              <div class="k">Project</div><div class="v">{{ k.project_label }}</div>
+              {% if k.folders %}
+              <div class="k">Folder ancestry</div><div class="v mono tiny">{{ k.folders | join(" > ") }}</div>
+              {% endif %}
+            </div>
+            {% if k.findings %}
+            <ul class="findings-list">
+              {% for f in k.findings %}
+              <li><span class="badge sev-{{ f.severity }}">{{ f.severity }}</span> {{ f.message }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            <strong>Restrictions JSON</strong>
+            <pre>{{ k.restrictions_json }}</pre>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">No active API keys found in this organization.</div>
+  {% endif %}
+</section>
+
+{% if deleted_keys %}
+<section>
+  <details class="deleted-section">
+    <summary>Soft-deleted keys ({{ total_deleted }}) - within the API Keys undelete window</summary>
+    <div class="inner">
+      <div class="table-wrap">
+        <table class="keys">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Project</th>
+              <th>Deleted</th>
+              <th>Restrictions at delete time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for k in deleted_keys %}
+            <tr class="summary" onclick="toggleRow(this)">
+              <td>
+                <div><strong>{{ k.display_name }}</strong> <span class="badge deleted">DELETED</span></div>
+                <div class="muted mono tiny wrap-anywhere">{{ k.uid }}</div>
+              </td>
+              <td>
+                <div>{{ k.project_label }}</div>
+                <div class="muted mono tiny wrap-anywhere">{{ k.project_id or "unknown-id" }}</div>
+              </td>
+              <td class="mono tiny nowrap">{{ k.delete_time or "unknown" }}</td>
+              <td>
+                {% for chip in k.chips %}
+                  <span class="chip {{ chip.kind }}">{{ chip.label }}</span>
+                {% else %}
+                  <span class="muted">No restrictions recorded</span>
+                {% endfor %}
+              </td>
+            </tr>
+            <tr class="details">
+              <td colspan="4">
+                <div class="details-grid">
+                  <div class="k">Resource name</div><div class="v mono tiny">{{ k.name }}</div>
+                  <div class="k">Created</div><div class="v mono tiny">{{ k.create_time or "unknown" }}</div>
+                  <div class="k">Updated</div><div class="v mono tiny">{{ k.update_time or "unknown" }}</div>
+                </div>
+                <pre>{{ k.restrictions_json }}</pre>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </details>
+</section>
+{% endif %}
+
+<footer>
+  Generated by <code>gcp-api-keys-discover</code>. The scanner reads Cloud Asset Inventory
+  metadata only and never retrieves API key secret values. Re-run with
+  <code>uv run python discover.py --organization {{ org.org_id }} --output report.html</code>.
+</footer>
+</div>
+
+<script>
+  var severityRank = {{ severity_rank | tojson }};
+
+  function splitValues(value) {
+    return (value || '').split('|').filter(Boolean);
+  }
+
+  function containsValue(valueList, wanted) {
+    if (!wanted) return true;
+    return splitValues(valueList).indexOf(wanted) !== -1;
+  }
+
+  function toggleRow(summaryRow) {
+    var details = summaryRow.nextElementSibling;
+    if (!details || !details.classList.contains('details')) return;
+    details.style.display = (details.style.display === 'table-row') ? 'none' : 'table-row';
+  }
+
+  function quickFilter(kind, value) {
+    var mapping = {
+      severity: 'severity-filter',
+      project: 'project-filter',
+      api: 'api-filter',
+      client: 'client-filter'
+    };
+    var target = document.getElementById(mapping[kind]);
+    if (!target) return;
+    target.value = value;
+    applyFilters();
+    document.getElementById('active-keys').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function resetFilters() {
+    ['filter-input', 'severity-filter', 'project-filter', 'api-filter', 'client-filter', 'group-filter'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    var sort = document.getElementById('sort-filter');
+    if (sort) sort.value = 'severity';
+    applyFilters();
+  }
+
+  function expandVisible(expand) {
+    document.querySelectorAll('#keys-table tbody tr.summary').forEach(function(row) {
+      if (row.style.display === 'none') return;
+      var details = row.nextElementSibling;
+      if (details && details.classList.contains('details')) {
+        details.style.display = expand ? 'table-row' : 'none';
+      }
+    });
+  }
+
+  function groupLabel(row, groupBy) {
+    if (groupBy === 'severity') return row.dataset.severity || 'Unknown severity';
+    if (groupBy === 'project') return row.dataset.project || 'Unknown project';
+    if (groupBy === 'api') return row.dataset.apiGroup || 'Unknown API target';
+    if (groupBy === 'client') return row.dataset.clientGroup || 'Unknown client restriction';
+    return '';
+  }
+
+  function sortRows(groupBy) {
+    var tbody = document.querySelector('#keys-table tbody');
+    if (!tbody) return [];
+    tbody.querySelectorAll('tr.group-row').forEach(function(row) { row.remove(); });
+    var pairs = [];
+    tbody.querySelectorAll('tr.summary').forEach(function(row) {
+      var details = row.nextElementSibling && row.nextElementSibling.classList.contains('details')
+        ? row.nextElementSibling
+        : null;
+      pairs.push({ summary: row, details: details });
+    });
+    var sortBy = document.getElementById('sort-filter').value || 'severity';
+    pairs.sort(function(a, b) {
+      var ar = a.summary.dataset;
+      var br = b.summary.dataset;
+      if (groupBy) {
+        var groupCompare = groupLabel(a.summary, groupBy).localeCompare(groupLabel(b.summary, groupBy));
+        if (groupCompare !== 0) return groupCompare;
+      }
+      if (sortBy === 'severity') {
+        return Number(ar.severityRank || 99) - Number(br.severityRank || 99)
+          || (ar.project || '').localeCompare(br.project || '')
+          || (ar.name || '').localeCompare(br.name || '');
+      }
+      if (sortBy === 'project') {
+        return (ar.project || '').localeCompare(br.project || '')
+          || Number(ar.severityRank || 99) - Number(br.severityRank || 99)
+          || (ar.name || '').localeCompare(br.name || '');
+      }
+      if (sortBy === 'api') {
+        return (ar.apiGroup || '').localeCompare(br.apiGroup || '')
+          || Number(ar.severityRank || 99) - Number(br.severityRank || 99)
+          || (ar.name || '').localeCompare(br.name || '');
+      }
+      if (sortBy === 'created') {
+        return (br.created || '').localeCompare(ar.created || '')
+          || (ar.name || '').localeCompare(br.name || '');
+      }
+      return (ar.name || '').localeCompare(br.name || '');
+    });
+    pairs.forEach(function(pair) {
+      tbody.appendChild(pair.summary);
+      if (pair.details) tbody.appendChild(pair.details);
+    });
+    return pairs;
+  }
+
+  function applyFilters() {
+    var q = (document.getElementById('filter-input').value || '').trim().toLowerCase();
+    var severity = document.getElementById('severity-filter').value;
+    var project = document.getElementById('project-filter').value;
+    var api = document.getElementById('api-filter').value;
+    var client = document.getElementById('client-filter').value;
+    var groupBy = document.getElementById('group-filter').value;
+    var pairs = sortRows(groupBy);
+    var visibleCount = 0;
+
+    pairs.forEach(function(pair) {
+      var row = pair.summary;
+      var matches =
+        (!q || (row.dataset.search || '').indexOf(q) !== -1) &&
+        (!severity || row.dataset.severity === severity) &&
+        (!project || row.dataset.project === project) &&
+        containsValue(row.dataset.api, api) &&
+        containsValue(row.dataset.client, client);
+
+      row.style.display = matches ? '' : 'none';
+      if (pair.details && !matches) pair.details.style.display = 'none';
+      if (matches) visibleCount += 1;
+    });
+
+    document.getElementById('visible-count').textContent = String(visibleCount);
+    if (groupBy) insertGroupRows(groupBy);
+  }
+
+  function insertGroupRows(groupBy) {
+    var tbody = document.querySelector('#keys-table tbody');
+    if (!tbody) return;
+    var rows = Array.from(tbody.querySelectorAll('tr.summary')).filter(function(row) {
+      return row.style.display !== 'none';
+    });
+    var groups = {};
+    rows.forEach(function(row) {
+      var label = groupLabel(row, groupBy);
+      groups[label] = (groups[label] || 0) + 1;
+    });
+    var current = null;
+    rows.forEach(function(row) {
+      var label = groupLabel(row, groupBy);
+      if (label !== current) {
+        current = label;
+        var group = document.createElement('tr');
+        group.className = 'group-row';
+        var cell = document.createElement('td');
+        cell.colSpan = 6;
+        cell.textContent = label;
+        var count = document.createElement('span');
+        count.className = 'group-count';
+        count.textContent = '(' + groups[label] + ')';
+        cell.appendChild(count);
+        group.appendChild(cell);
+        tbody.insertBefore(group, row);
+      }
+    });
+  }
+
+  applyFilters();
+</script>
+</body>
+</html>
