@@ -4,9 +4,9 @@
 
 # Commit GCP API Keys Discover
 
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=REPLACE_WITH_REPO_URL&cloudshell_tutorial=cloudshell/tutorial.md)
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/commitgcp/gcp-apikeys-inspector&cloudshell_tutorial=cloudshell/tutorial.md)
 
-> Before publishing this README, replace `REPLACE_WITH_REPO_URL` in the Cloud
+> Before publishing this README, replace `https://github.com/commitgcp/gcp-apikeys-inspector` in the Cloud
 > Shell button with the HTTPS Git URL for this repository.
 
 Discover every API Key (`apikeys.googleapis.com/Key`) across a Google Cloud
@@ -117,13 +117,13 @@ cloudshell launch-tutorial cloudshell/tutorial.md
 For a hosted repository, use this button/link format in published docs:
 
 ```markdown
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=REPLACE_WITH_REPO_URL&cloudshell_tutorial=cloudshell/tutorial.md)
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/commitgcp/gcp-apikeys-inspector&cloudshell_tutorial=cloudshell/tutorial.md)
 ```
 
 Equivalent plain URL:
 
 ```text
-https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=REPLACE_WITH_REPO_URL&cloudshell_tutorial=cloudshell/tutorial.md
+https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/commitgcp/gcp-apikeys-inspector&cloudshell_tutorial=cloudshell/tutorial.md
 ```
 
 The `cloudshell_git_repo` value must be the hosted Git repository URL. The
