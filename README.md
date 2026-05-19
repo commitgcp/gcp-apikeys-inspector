@@ -6,18 +6,9 @@
 
 [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/commitgcp/gcp-apikeys-inspector&cloudshell_tutorial=cloudshell/tutorial.md)
 
-> Before publishing this README, replace `https://github.com/commitgcp/gcp-apikeys-inspector` in the Cloud
-> Shell button with the HTTPS Git URL for this repository.
-
 Discover every API Key (`apikeys.googleapis.com/Key`) across a Google Cloud
 organization and produce a standalone Commit-branded HTML report with per-key
 restrictions, inline security findings, and interactive filtering/grouping.
-
-The generated report is intended for Commit-led Google Cloud security reviews:
-it uses Commit visual branding, keeps all report assets self-contained, and
-organizes API key risk by severity, project, API target, and client restriction.
-The scanner reads metadata from Cloud Asset Inventory only; it never retrieves
-API key secret values.
 
 ## Quick paths
 
@@ -44,12 +35,11 @@ API key secret values.
    branding, CSS, and vanilla JS; no runtime external assets).
 5. Optionally writes sanitized JSON for agent-assisted analysis and automation.
 
-## Commit-branded report
+## Report
 
 The HTML report is a standalone artifact that can be shared with stakeholders
 without requiring a web server or external CSS/JS. It includes:
 
-- Embedded Commit logo and Commit-inspired red/charcoal styling.
 - Executive summary cards for active keys, projects, soft-deleted keys, and severity counts.
 - Priority findings for CRITICAL and HIGH risks.
 - Search plus filters for severity, project, API target, and client restriction.
