@@ -3,14 +3,22 @@ set -euo pipefail
 
 ORG_ID=""
 QUOTA_PROJECT=""
+DISCOVER_ONLY="false"
 
 usage() {
   cat <<'EOF'
 Usage: scripts/gcp-api-keys-discover.sh [--organization ORG_ID] [--quota-project PROJECT_ID]
+       scripts/gcp-api-keys-discover.sh --discover-only
 
 Runs the GCP API keys report from an authenticated gcloud shell. This Cloud
 Shell path intentionally uses the active gcloud account and does not require
 Application Default Credentials.
+
+Use --discover-only to print visible organization and quota-project candidates
+without running the report.
+
+Report mode overwrites reports/index.html and reports/report.json, then starts a
+Cloud Shell Web Preview server rooted at reports/.
 EOF
 }
 
@@ -41,6 +49,57 @@ discover_org_for_project() {
     awk -F, 'tolower($1) == "organization" {print $2; exit}'
 }
 
+emit_project_candidate() {
+  local project_id="$1"
+  local source="$2"
+  local org_id="${3:-}"
+
+  if ! valid_project "$project_id" >/dev/null; then
+    return 0
+  fi
+
+  printf 'PROJECT\t%s\t%s\t%s\n' "$project_id" "$source" "$org_id"
+  if org_id="$(normalize_org "$org_id")"; then
+    printf 'ORGANIZATION\t%s\tproject_ancestor\t%s\n' "$org_id" "$project_id"
+  fi
+}
+
+emit_org_candidate() {
+  local org_id="$1"
+  local source="$2"
+  local display_name="${3:-}"
+
+  if ! org_id="$(normalize_org "$org_id")"; then
+    return 0
+  fi
+
+  printf 'ORGANIZATION\t%s\t%s\t%s\n' "$org_id" "$source" "$display_name"
+}
+
+discover_candidates() {
+  local active_account="$1"
+  local current_project="$2"
+  local billing_quota_project="$3"
+
+  echo "DISCOVERY_FORMAT: TYPE<TAB>ID<TAB>SOURCE<TAB>DETAIL"
+  printf 'ACCOUNT\t%s\tactive_gcloud_account\t\n' "$active_account"
+
+  while IFS=, read -r org_name display_name; do
+    emit_org_candidate "$org_name" "gcloud_organizations_list" "$display_name"
+  done < <(gcloud organizations list --format="csv[no-heading](name,displayName)" 2>/dev/null || true)
+
+  emit_project_candidate "$current_project" "gcloud_config_project" "$(discover_org_for_project "$current_project" || true)"
+  emit_project_candidate "$billing_quota_project" "gcloud_billing_quota_project" "$(discover_org_for_project "$billing_quota_project" || true)"
+  emit_project_candidate "${GOOGLE_CLOUD_PROJECT:-}" "GOOGLE_CLOUD_PROJECT" "$(discover_org_for_project "${GOOGLE_CLOUD_PROJECT:-}" || true)"
+  emit_project_candidate "${CLOUDSDK_CORE_PROJECT:-}" "CLOUDSDK_CORE_PROJECT" "$(discover_org_for_project "${CLOUDSDK_CORE_PROJECT:-}" || true)"
+  emit_project_candidate "${DEVSHELL_PROJECT_ID:-}" "DEVSHELL_PROJECT_ID" "$(discover_org_for_project "${DEVSHELL_PROJECT_ID:-}" || true)"
+  emit_project_candidate "${GCLOUD_PROJECT:-}" "GCLOUD_PROJECT" "$(discover_org_for_project "${GCLOUD_PROJECT:-}" || true)"
+
+  while IFS= read -r project_id; do
+    emit_project_candidate "$project_id" "gcloud_projects_list" "$(discover_org_for_project "$project_id" || true)"
+  done < <(gcloud projects list --filter="lifecycleState=ACTIVE" --format="value(projectId)" --limit=50 2>/dev/null || true)
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --organization | --org)
@@ -57,6 +116,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --quota-project=* | --project=*)
       QUOTA_PROJECT="$(valid_project "${1#*=}")"
+      shift
+      ;;
+    --discover-only)
+      DISCOVER_ONLY="true"
       shift
       ;;
     --help | -h)
@@ -84,6 +147,85 @@ fi
 
 CURRENT_PROJECT="$(gcloud config get-value project 2>/dev/null || true)"
 BILLING_QUOTA_PROJECT="$(gcloud config get-value billing/quota_project 2>/dev/null || true)"
+
+if [ "$DISCOVER_ONLY" = "true" ]; then
+  discover_candidates "$ACTIVE_ACCOUNT" "$CURRENT_PROJECT" "$BILLING_QUOTA_PROJECT" |
+    awk -F '\t' '
+      function friendly_source(source) {
+        if (source == "gcloud_organizations_list") return "visible organization list"
+        if (source == "project_ancestor") return "project ancestor"
+        if (source == "gcloud_config_project") return "active gcloud project"
+        if (source == "gcloud_billing_quota_project") return "gcloud quota project"
+        if (source == "GOOGLE_CLOUD_PROJECT") return "Cloud Shell project"
+        if (source == "CLOUDSDK_CORE_PROJECT") return "Cloud SDK project"
+        if (source == "DEVSHELL_PROJECT_ID") return "Cloud Shell environment"
+        if (source == "GCLOUD_PROJECT") return "gcloud environment"
+        if (source == "gcloud_projects_list") return "visible project list"
+        return source
+      }
+      $1 == "ACCOUNT" && account == "" {
+        account = $2
+        next
+      }
+      $1 == "ORGANIZATION" {
+        id = $2
+        if (!seen_org[id]++) {
+          org_ids[++org_count] = id
+          org_source[id] = $3
+          org_detail[id] = $4
+        } else if (org_detail[id] == "" && $4 != "") {
+          org_detail[id] = $4
+          org_source[id] = $3
+        }
+        next
+      }
+      $1 == "PROJECT" {
+        id = $2
+        if (!seen_project[id]++) {
+          project_ids[++project_count] = id
+          project_source[id] = $3
+          project_org[id] = $4
+        } else if (project_org[id] == "" && $4 != "") {
+          project_org[id] = $4
+        }
+        next
+      }
+      END {
+        print "Discovery complete."
+        print ""
+        print "Active gcloud account:"
+        print "- " (account != "" ? account : "none")
+        print ""
+        print "Organizations:"
+        if (org_count == 0) {
+          print "- None visible from the active account."
+        } else {
+          for (i = 1; i <= org_count; i++) {
+            id = org_ids[i]
+            label = "organizations/" id
+            if (org_detail[id] != "") {
+              label = org_detail[id] " (" label ")"
+            }
+            print i ". " label " - " friendly_source(org_source[id])
+          }
+        }
+        print ""
+        print "Quota project candidates:"
+        if (project_count == 0) {
+          print "- None visible from the active account."
+        } else {
+          for (i = 1; i <= project_count; i++) {
+            id = project_ids[i]
+            org = project_org[id] != "" ? " (org organizations/" project_org[id] ")" : ""
+            print i ". " id org " - " friendly_source(project_source[id])
+          }
+        }
+        print ""
+        print "Next step: choose one organization and one quota project for the API key report."
+      }
+    '
+  exit 0
+fi
 
 if [ -z "$QUOTA_PROJECT" ]; then
   for candidate in \
@@ -168,12 +310,12 @@ gcloud asset search-all-resources \
   --billing-project="$QUOTA_PROJECT" \
   --format="table(name,assetType,project)"
 
-uv sync
 mkdir -p reports
+uv sync
 
-RUN_ID="$(date -u +%Y%m%d-%H%M%S)"
-HTML_REPORT="reports/api-keys-${ORG_ID}-${RUN_ID}.html"
-JSON_REPORT="reports/api-keys-${ORG_ID}-${RUN_ID}.json"
+HTML_REPORT="reports/index.html"
+JSON_REPORT="reports/report.json"
+rm -f "$HTML_REPORT" "$JSON_REPORT"
 
 set +e
 uv run --no-sync python discover.py \
@@ -193,17 +335,20 @@ if [ "$SCAN_STATUS" != "0" ] && [ "$SCAN_STATUS" != "1" ]; then
 fi
 
 PORT=""
-for candidate in 8080 8081 8082 8083 8084; do
+for candidate in $(seq 8080 8099); do
   if ! lsof -iTCP:"$candidate" -sTCP:LISTEN >/dev/null 2>&1; then
     PORT="$candidate"
     break
   fi
 done
 
-if [ -n "$PORT" ]; then
-  nohup python3 -m http.server "$PORT" > "reports/web-preview-${PORT}.log" 2>&1 &
-  echo $! > "reports/web-preview-${PORT}.pid"
+if [ -z "$PORT" ]; then
+  echo "Could not start Cloud Shell Web Preview: no free port found in 8080-8099." >&2
+  exit 2
 fi
+
+nohup python3 -m http.server "$PORT" --directory reports > "reports/web-preview-${PORT}.log" 2>&1 &
+echo $! > "reports/web-preview-${PORT}.pid"
 
 python3 - "$JSON_REPORT" <<'PY'
 import json
@@ -223,9 +368,8 @@ PY
 
 echo "HTML report: $HTML_REPORT"
 echo "JSON report: $JSON_REPORT"
-if [ -n "$PORT" ]; then
-  echo "Cloud Shell preview port: $PORT"
-fi
+echo "Cloud Shell preview port: $PORT"
+echo "Cloud Shell preview root: reports/index.html"
 echo "Download command: cloudshell download \"$HTML_REPORT\" \"$JSON_REPORT\""
 
 if [ "$SCAN_STATUS" = "1" ]; then

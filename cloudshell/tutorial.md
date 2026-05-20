@@ -3,6 +3,25 @@
 This tutorial opens the repo in Cloud Shell and hands the workflow to Gemini
 CLI.
 
+## Trust And Authenticate
+
+When Cloud Shell asks whether to trust this repository, approve it. In a trusted
+repo, Cloud Shell is already authenticated as the signed-in user and the report
+command can use that active gcloud session.
+
+Before starting Gemini, verify that gcloud has an active account:
+
+```bash
+gcloud auth list --filter="status:ACTIVE" --format="value(account)"
+```
+
+If this prints your user email, continue to the next step. If it prints nothing,
+authenticate first:
+
+```bash
+gcloud auth login --update-adc
+```
+
 ## Start Gemini
 
 In the Cloud Shell terminal, run:
@@ -10,12 +29,6 @@ In the Cloud Shell terminal, run:
 ```bash
 gemini
 ```
-
-If Gemini asks whether to trust this workspace, approve it. In a trusted repo,
-Cloud Shell is already authenticated as the signed-in user and the report command
-can use that active gcloud session. If the workspace is not trusted, Gemini may
-not be able to use the existing Cloud Shell session and the user may need to run
-a separate `gcloud auth login` flow.
 
 ## Run the Report Command
 
@@ -25,11 +38,16 @@ Inside Gemini CLI, run:
 /gcp-api-keys-discover
 ```
 
-The command runs the repository's deterministic Cloud Shell script. The script
-discovers the organization ID and quota project from gcloud, Cloud Shell
-environment variables, visible organizations, and project ancestors. It uses the
-already-authenticated active gcloud account and does not run `gcloud auth
-application-default login`.
+The command first lists visible organizations and quota-project candidates from
+gcloud, Cloud Shell environment variables, visible organizations, and project
+ancestors. Gemini asks which organization and quota project to use, then runs the
+scanner with those explicit values. It uses the already-authenticated active
+gcloud account and does not run `gcloud auth application-default login`.
+
+The generated files are always overwritten at:
+
+- `reports/index.html`
+- `reports/report.json`
 
 If the command is not visible, run:
 
@@ -42,18 +60,19 @@ Then run `/gcp-api-keys-discover` again.
 
 ## Download Or Preview
 
-Gemini prints the generated HTML and JSON paths under `reports/`.
+Gemini starts a local web server rooted at `reports/`, so Cloud Shell Web Preview
+opens the HTML report directly instead of showing the repository directory.
 
-Download the files to your local machine:
+You are still inside Gemini CLI after report generation. Prefix shell commands
+with `!`. Download the files to your local machine:
 
-```bash
-cloudshell download reports/<report>.html reports/<report>.json
+```text
+! cloudshell download reports/index.html reports/report.json
 ```
 
-Or preview the HTML report in Cloud Shell. If Gemini starts a Python web server,
-use the Web Preview menu in the top-right toolbar. Choose `Preview on port 8080`
-when Gemini used port `8080`; otherwise choose `Change port` and enter the port
-Gemini printed.
+Inspect the HTML report in Cloud Shell with the Web Preview menu in the
+top-right toolbar. Choose `Preview on port 8080` when Gemini used port `8080`;
+otherwise choose `Change port` and enter the port Gemini printed.
 
 <!-- TODO: Add Web Preview screenshot before committing.
 Suggested path: cloudshell/assets/web-preview-8080.png

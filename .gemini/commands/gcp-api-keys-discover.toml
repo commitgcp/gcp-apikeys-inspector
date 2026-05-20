@@ -10,24 +10,60 @@ User-provided command args:
 
 {{args}}
 
-## Run The Workflow
+## Discover, Confirm, Then Run
 
-Do not perform manual input discovery, do not open an "Answer Questions" form,
-and do not run any `gcloud auth application-default ...` command. Cloud Shell is
+Do not run the report immediately. First discover visible organizations and
+quota-project candidates, show the choices to the user, and ask which
+organization and quota project to use for API key discovery.
+
+Do not run any `gcloud auth application-default ...` command. Cloud Shell is
 already authenticated through the active gcloud account; Application Default
 Credentials are a separate credential store and are not required by this command.
 
-Run the deterministic repository script exactly once, passing through user args:
+Run deterministic discovery first:
 
 ```bash
-scripts/gcp-api-keys-discover.sh {{args}}
+scripts/gcp-api-keys-discover.sh --discover-only
 ```
 
-The script handles all input discovery, validation, report generation, and Cloud
-Shell preview startup. It intentionally filters placeholder project values such
-as `(unset)` and `CURRENT_PROJECT`, discovers the organization through project
-ancestors when possible, and uses `gcloud auth print-access-token` for the
-scanner instead of ADC.
+Present the discovery output as a short, friendly choice list. Do not show raw
+command chatter or internal source labels unless they help disambiguate choices.
+Show:
+
+- visible organization IDs, with display names when available
+- visible project IDs, with their organization ancestor when available
+- the active gcloud account
+
+Then ask the user, in one concise question, to choose:
+
+- target organization for API key discovery
+- quota project for Cloud Asset Inventory API calls
+
+If there is exactly one organization and one quota project candidate, ask the
+user to confirm those defaults instead of making them retype the IDs.
+
+If user-provided command args include organization or quota-project values,
+still run discovery first and ask the user to confirm or change those values
+against the discovered candidates.
+
+Only after the user chooses both values, run the report script with explicit
+arguments:
+
+```bash
+scripts/gcp-api-keys-discover.sh --organization "$ORG_ID" --quota-project "$QUOTA_PROJECT"
+```
+
+The script validates access, generates the report, and always starts a Cloud
+Shell Web Preview server after a successful report so the user can inspect the
+HTML file.
+
+The report paths are fixed and overwritten on each run:
+
+- HTML: `reports/index.html`
+- JSON: `reports/report.json`
+
+The preview server is rooted at `reports/`, so opening the Cloud Shell preview
+port shows the HTML report directly instead of a repository directory listing.
 
 If the script exits `2`, report the exact blocker and retry command it printed.
 If the script exits `0`, treat the report generation as successful and use the
@@ -68,6 +104,13 @@ Tell the user to use the Cloud Shell Web Preview menu:
 
 - choose `Preview on port 8080` if `PORT=8080`
 - otherwise choose `Change port` and enter the printed port
+
+For download commands shown while the user is still inside Gemini CLI, prefix the
+shell command with `!`, for example:
+
+```text
+! cloudshell download reports/index.html reports/report.json
+```
 
 End with a concise summary of the run, risks, report paths, and preview/download
 instructions.

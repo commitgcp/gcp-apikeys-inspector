@@ -16,15 +16,26 @@ values.
 This repo uses one agent entrypoint: the Gemini CLI project command
 `/gcp-api-keys-discover`.
 
+When Cloud Shell asks whether to trust this repository, approve it. In a trusted
+Cloud Shell workspace, the command can use Cloud Shell's already-authenticated
+gcloud session as the signed-in user.
+
+Before starting Gemini, verify that gcloud has an active account:
+
+```bash
+gcloud auth list --filter="status:ACTIVE" --format="value(account)"
+```
+
+If this prints your user email, continue. If it prints nothing, authenticate
+first:
+
+```bash
+gcloud auth login --update-adc
+```
+
 ```bash
 gemini
 ```
-
-If Gemini asks whether to trust this workspace, approve it. In a trusted Cloud
-Shell workspace, the command can use Cloud Shell's already-authenticated gcloud
-session as the signed-in user. If the workspace is not trusted, Gemini may not be
-able to use that session and the user may be forced through a separate `gcloud`
-login flow.
 
 Then, inside Gemini CLI:
 
@@ -32,11 +43,17 @@ Then, inside Gemini CLI:
 /gcp-api-keys-discover
 ```
 
-The command delegates to `scripts/gcp-api-keys-discover.sh`, which discovers the
-organization ID and quota project from args, gcloud config, Cloud Shell
-environment variables, visible organizations, and project ancestors. In Cloud
-Shell it uses the already-authenticated active gcloud account; it does not run
-`gcloud auth application-default login`.
+The command first runs a discovery-only check that lists visible organizations
+and quota-project candidates from gcloud config, Cloud Shell environment
+variables, visible organizations, and project ancestors. Gemini asks which
+organization and quota project to use, then runs the scanner with those explicit
+values. In Cloud Shell it uses the already-authenticated active gcloud account;
+it does not run `gcloud auth application-default login`.
+
+Reports are ephemeral and overwritten on every run:
+
+- HTML report: `reports/index.html`
+- JSON data: `reports/report.json`
 
 If Gemini was already open before you pulled these files:
 
@@ -47,9 +64,10 @@ If Gemini was already open before you pulled these files:
 
 ## Cloud Shell
 
-Use the Open in Cloud Shell button above. When Gemini asks whether to trust the
-workspace, approve it so the command can use Cloud Shell's already-authenticated
-gcloud session. The tutorial only asks you to run:
+Use the Open in Cloud Shell button above. When Cloud Shell asks whether to trust
+the repository, approve it so the command can use Cloud Shell's
+already-authenticated gcloud session. The tutorial asks you to verify auth, then
+run:
 
 ```bash
 gemini
@@ -61,15 +79,17 @@ Then:
 /gcp-api-keys-discover
 ```
 
-After the report is generated, Gemini will show exact paths under `reports/`.
-Download them with:
+After the report is generated, Gemini starts a local web server rooted at
+`reports/`, so Cloud Shell Web Preview opens the HTML report directly instead of
+showing the repository directory. If you are still inside Gemini CLI, prefix
+shell commands with `!`. Download the files with:
 
-```bash
-cloudshell download reports/<report>.html reports/<report>.json
+```text
+! cloudshell download reports/index.html reports/report.json
 ```
 
-Or preview the HTML report with Cloud Shell Web Preview if Gemini starts the
-local Python server.
+Or inspect the HTML report with Cloud Shell Web Preview using the port Gemini
+prints.
 
 ## Required Access
 
@@ -91,7 +111,7 @@ gcloud services enable cloudasset.googleapis.com --project <QUOTA_PROJECT>
 From an authenticated Cloud Shell or gcloud session:
 
 ```bash
-scripts/gcp-api-keys-discover.sh
+scripts/gcp-api-keys-discover.sh --organization <ORG_ID> --quota-project <QUOTA_PROJECT>
 ```
 
 Or run the Python scanner directly with the active gcloud account:
