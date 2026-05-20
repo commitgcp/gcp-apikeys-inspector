@@ -1,12 +1,10 @@
 <p align="left">
-  <img src="assets/commit-logo-dark.png" alt="Commit logo" width="142">
+  <img src="assets/commit-logo-white-red-dot.png" alt="Commit logo" width="142">
 </p>
 
 # Commit GCP API Keys Discover
 
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=REPLACE_WITH_REPO_URL&cloudshell_tutorial=cloudshell/tutorial.md)
-
-> Replace `REPLACE_WITH_REPO_URL` with this repository's hosted HTTPS Git URL.
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/commitgcp/gcp-apikeys-inspector&cloudshell_tutorial=cloudshell/tutorial.md)
 
 Scan a Google Cloud organization for API keys and generate a standalone
 Commit-branded HTML report plus optional JSON data. The scanner reads Cloud
