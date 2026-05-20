@@ -4,145 +4,115 @@
 
 # Commit GCP API Keys Discover
 
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/commitgcp/gcp-apikeys-inspector&cloudshell_tutorial=cloudshell/tutorial.md)
+[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=REPLACE_WITH_REPO_URL&cloudshell_tutorial=cloudshell/tutorial.md)
 
-Discover every API Key (`apikeys.googleapis.com/Key`) across a Google Cloud
-organization and produce a standalone Commit-branded HTML report with per-key
-restrictions, inline security findings, and interactive filtering/grouping.
+> Replace `REPLACE_WITH_REPO_URL` with this repository's hosted HTTPS Git URL.
 
-## Quick paths
+Scan a Google Cloud organization for API keys and generate a standalone
+Commit-branded HTML report plus optional JSON data. The scanner reads Cloud
+Asset Inventory metadata and restrictions only; it never fetches API key secret
+values.
 
-| Need | Start here |
-|---|---|
-| Run in Cloud Shell | Use the **Open in Cloud Shell** button above after replacing the repository URL. |
-| Run locally | Follow [Run](#run). |
-| Understand required IAM and auth | Read [docs/USER_GUIDE.md](docs/USER_GUIDE.md). |
-| Guide another user step-by-step | Launch [cloudshell/tutorial.md](cloudshell/tutorial.md). |
-| Ask an agent to run and analyze it | Use `$gcp-api-keys-discover`; see [Agent skill](#agent-skill). |
+## Run With Gemini CLI
 
-## How it works
-
-1. One call to **Cloud Asset Inventory** `searchAllResources` at organization
-   scope returns every API Key in the org with full restriction data, project
-   ancestry, and soft-delete state — no per-project fan-out.
-2. **Resource Manager** v3 fills in human-readable project `displayName`
-   (cached per project, tolerant of permission errors).
-3. Each key is scored against a fixed rubric (`gcp_api_keys/risk.py`):
-   CRITICAL when fully unrestricted, HIGH for missing API targets or wildcard
-   referrer/IP, MEDIUM when no client restriction, INFO for broad service
-   scopes and soft-deleted keys.
-4. A Jinja2 template renders one self-contained HTML file (inlined Commit
-   branding, CSS, and vanilla JS; no runtime external assets).
-5. Optionally writes sanitized JSON for agent-assisted analysis and automation.
-
-## Report
-
-The HTML report is a standalone artifact that can be shared with stakeholders
-without requiring a web server or external CSS/JS. It includes:
-
-- Executive summary cards for active keys, projects, soft-deleted keys, and severity counts.
-- Priority findings for CRITICAL and HIGH risks.
-- Search plus filters for severity, project, API target, and client restriction.
-- Grouping by severity, project, API target, or client restriction.
-- Expandable rows with raw restrictions JSON for remediation review.
-- Optional JSON output for agents or downstream processing.
-
-## Requirements
-
-- Python 3.10+, `uv` installed.
-- Application Default Credentials configured for a principal with:
-  - `roles/cloudasset.viewer` on the target organization (required)
-  - `roles/serviceusage.serviceUsageConsumer` on a quota project (required for user ADC)
-  - `roles/browser` or equivalent Resource Manager read permissions (optional, for display names)
-- Cloud Asset Inventory API enabled on the quota project:
-  ```
-  gcloud services enable cloudasset.googleapis.com --project <QUOTA_PROJECT>
-  ```
-
-For exact IAM, authentication, validation, and troubleshooting steps, see
-[docs/USER_GUIDE.md](docs/USER_GUIDE.md).
-
-## Run
+This repo uses one agent entrypoint: the Gemini CLI project command
+`/gcp-api-keys-discover`.
 
 ```bash
-cd gcp-api-keys-discover
-uv sync
-gcloud auth application-default login   # if not already done
-gcloud auth application-default set-quota-project <QUOTA_PROJECT>
-uv run python discover.py \
-  --organization 105196367825 \
-  --output report.html \
-  --json-output report.json
-open report.html
+gemini
 ```
 
-Flags:
+Then, inside Gemini CLI:
 
-- `--organization <id>` — numeric org ID (or `organizations/<id>`). Required.
-- `--output <path>` — output HTML path. Defaults to `report.html`.
-- `--json-output <path>` — optional sanitized machine-readable report.
-- `--no-resolve-projects` — skip Resource Manager calls (faster, no displayName).
-- `--exit-zero` — always exit 0 even when CRITICAL findings are present.
+```text
+/gcp-api-keys-discover
+```
+
+The command asks for the organization ID and quota project, validates Google
+Cloud auth and Cloud Asset Inventory access, runs the scanner, explains the
+findings, and offers to start Cloud Shell Web Preview for the HTML report.
+
+If Gemini was already open before you pulled these files:
+
+```text
+/commands reload
+/commands list
+```
+
+## Cloud Shell
+
+Use the Open in Cloud Shell button above. The tutorial only asks you to run:
+
+```bash
+gemini
+```
+
+Then:
+
+```text
+/gcp-api-keys-discover
+```
+
+After the report is generated, Gemini will show exact paths under `reports/`.
+Download them with:
+
+```bash
+cloudshell download reports/<report>.html reports/<report>.json
+```
+
+Or preview the HTML report with Cloud Shell Web Preview if Gemini starts the
+local Python server.
+
+## Required Access
+
+The authenticated user needs:
+
+- `roles/cloudasset.viewer` on the target organization
+- `roles/serviceusage.serviceUsageConsumer` on the quota project
+- optional: `roles/browser` or equivalent Resource Manager read access for
+  project and organization display names
+
+Cloud Asset Inventory must be enabled on the quota project:
+
+```bash
+gcloud services enable cloudasset.googleapis.com --project <QUOTA_PROJECT>
+```
+
+## Manual Run
+
+```bash
+uv sync
+gcloud auth application-default login
+gcloud auth application-default set-quota-project <QUOTA_PROJECT>
+uv run python discover.py \
+  --organization <ORG_ID> \
+  --output report.html \
+  --json-output report.json
+```
 
 Exit codes:
 
 | Code | Meaning |
 |---|---|
-| `0` | Scan succeeded, no CRITICAL findings (or `--exit-zero` set). |
-| `1` | Scan succeeded, at least one CRITICAL finding. Useful as a CI gate. |
-| `2` | Scan could not complete (auth, permission, or API-enablement error). |
+| `0` | Scan succeeded without CRITICAL active-key findings. |
+| `1` | Scan succeeded and found CRITICAL active-key findings. |
+| `2` | Scan failed because of auth, permission, API, or organization issues. |
 
-## Cloud Shell tutorial
+## Report Features
 
-The included tutorial walks users through setting `ORG_ID`, validating ADC,
-checking IAM/API access, syncing dependencies with `uv`, running the scanner,
-and previewing the HTML report in Cloud Shell.
+- Commit-branded standalone HTML
+- severity, project, API, and client-restriction filters
+- grouping by severity, project, API, or client restriction
+- expandable rows with raw restrictions JSON
+- optional sanitized JSON for follow-up analysis
 
-Launch it from an existing Cloud Shell checkout:
-
-```bash
-cloudshell launch-tutorial cloudshell/tutorial.md
-```
-
-For a hosted repository, use this button/link format in published docs:
-
-```markdown
-[![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/commitgcp/gcp-apikeys-inspector&cloudshell_tutorial=cloudshell/tutorial.md)
-```
-
-Equivalent plain URL:
+## Files
 
 ```text
-https://ssh.cloud.google.com/cloudshell/open?cloudshell_git_repo=https://github.com/commitgcp/gcp-apikeys-inspector&cloudshell_tutorial=cloudshell/tutorial.md
-```
-
-The `cloudshell_git_repo` value must be the hosted Git repository URL. The
-`cloudshell_tutorial` value points to this repo's tutorial file.
-
-## Agent skill
-
-The repo-local skill lives at:
-
-```text
-.agents/skills/gcp-api-keys-discover/SKILL.md
-```
-
-An agent can be instructed with `$gcp-api-keys-discover` to validate auth/IAM,
-run the scanner, generate HTML and JSON reports, and summarize findings.
-
-## Layout
-
-```
-discover.py                  # CLI entry
+discover.py
 gcp_api_keys/
-  inventory.py               # Cloud Asset Inventory search
-  projects.py                # Resource Manager displayName resolver
-  risk.py                    # severity rubric
-  models.py                  # dataclasses
-  report.py                  # Jinja render
-templates/report.html.j2     # self-contained HTML template
-assets/commit-logo-*.png     # embedded Commit report branding
-docs/USER_GUIDE.md           # exact runbook and permissions
-cloudshell/tutorial.md       # Cloud Shell tutorial
-.agents/skills/...           # repo-local agent skill
+templates/report.html.j2
+assets/commit-logo-*.png
+.gemini/commands/gcp-api-keys-discover.toml
+cloudshell/tutorial.md
 ```

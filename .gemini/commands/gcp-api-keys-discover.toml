@@ -1,0 +1,129 @@
+description = "Generate and explain a Commit-branded GCP API keys report."
+
+prompt = """
+# Commit GCP API Keys Discover
+
+Run the guided API key report workflow for this repository. This command is the
+only agent entrypoint for the project and is fully self-contained.
+
+User-provided command args:
+
+{{args}}
+
+## Inputs
+
+Use command args if they include an organization ID and quota project. Otherwise
+ask the user for:
+
+- Google Cloud organization ID (`ORG_ID`), numeric or `organizations/<id>`.
+- quota project (`QUOTA_PROJECT`) for Cloud Asset Inventory API calls.
+
+If quota project is missing, inspect `gcloud config get-value project`, then ask
+the user to confirm before using it. Do not run cloud commands until both values
+are known.
+
+Normalize `organizations/<id>` to `<id>` for output filenames.
+
+## Access Required
+
+Explain missing access without attempting IAM grants. Required:
+
+- `roles/cloudasset.viewer` or `cloudasset.assets.searchAllResources` on the organization.
+- `roles/serviceusage.serviceUsageConsumer` or `serviceusage.services.use` on the quota project.
+- Optional for display names: `roles/browser` or equivalent Resource Manager read access.
+
+## Authentication And Validation
+
+Run these steps in order:
+
+1. Check active gcloud account:
+   `gcloud auth list --filter="status:ACTIVE" --format="value(account)"`
+2. If there is no active account, run `gcloud auth login`.
+3. Check ADC:
+   `gcloud auth application-default print-access-token >/dev/null`
+4. If ADC is missing or invalid, run `gcloud auth application-default login`.
+5. Configure quota/project:
+   `gcloud auth application-default set-quota-project "$QUOTA_PROJECT"`
+   `gcloud config set project "$QUOTA_PROJECT"`
+6. Check Cloud Asset Inventory API:
+   `gcloud services list --enabled --project "$QUOTA_PROJECT" --filter="config.name=cloudasset.googleapis.com" --format="value(config.name)"`
+7. If the API is disabled, ask for confirmation and run:
+   `gcloud services enable cloudasset.googleapis.com --project "$QUOTA_PROJECT"`
+8. Validate org scan access:
+   `gcloud asset search-all-resources --scope="organizations/$ORG_ID" --asset-types="apikeys.googleapis.com/Key" --limit=1 --billing-project="$QUOTA_PROJECT" --format="table(name,assetType,project)"`
+
+No rows is valid. Permission, quota, invalid organization, or API-enablement
+errors must be resolved before the full scan.
+
+## Generate Report
+
+Run:
+
+```bash
+uv sync
+mkdir -p reports
+RUN_ID="$(date -u +%Y%m%d-%H%M%S)"
+uv run python discover.py \
+  --organization "$ORG_ID" \
+  --output "reports/api-keys-${ORG_ID}-${RUN_ID}.html" \
+  --json-output "reports/api-keys-${ORG_ID}-${RUN_ID}.json"
+```
+
+Exit code handling:
+
+- `0`: scan completed without CRITICAL active-key findings.
+- `1`: scan completed and found CRITICAL findings; treat as successful report generation with urgent remediation.
+- `2`: scan failed; explain the blocker.
+
+## Explain Results
+
+Read the JSON report and summarize:
+
+- exact HTML and JSON paths
+- active and soft-deleted key totals
+- severity counts
+- CRITICAL and HIGH findings first
+- keys without API target restrictions
+- keys without client restrictions
+- wildcard referrers or open server IP ranges
+- projects/APIs with concentrated risk
+- any display-name permission gaps
+
+Do not claim API key secret values were inspected. The scanner reads metadata
+and restrictions only.
+
+## Preview Or Download
+
+Ask whether the user wants to preview the HTML report in Cloud Shell.
+
+If yes, start a background server from the repository root using the first free
+port from 8080-8084:
+
+```bash
+PORT=""
+for candidate in 8080 8081 8082 8083 8084; do
+  if ! lsof -iTCP:"$candidate" -sTCP:LISTEN >/dev/null 2>&1; then
+    PORT="$candidate"
+    break
+  fi
+done
+test -n "$PORT"
+nohup python3 -m http.server "$PORT" > "reports/web-preview-${PORT}.log" 2>&1 &
+echo $! > "reports/web-preview-${PORT}.pid"
+echo "$PORT"
+```
+
+Tell the user to use the Cloud Shell Web Preview menu:
+
+- choose `Preview on port 8080` if `PORT=8080`
+- otherwise choose `Change port` and enter the printed port
+
+If the user wants local files, provide:
+
+```bash
+cloudshell download "<html-report-path>" "<json-report-path>"
+```
+
+End with a concise summary of the run, risks, report paths, and preview/download
+instructions.
+"""
