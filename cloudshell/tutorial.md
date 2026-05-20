@@ -11,7 +11,11 @@ In the Cloud Shell terminal, run:
 gemini
 ```
 
-If Gemini asks whether to trust this workspace, approve it.
+If Gemini asks whether to trust this workspace, approve it. In a trusted repo,
+Cloud Shell is already authenticated as the signed-in user and the report command
+can use that active gcloud session. If the workspace is not trusted, Gemini may
+not be able to use the existing Cloud Shell session and the user may need to run
+a separate `gcloud auth login` flow.
 
 ## Run the Report Command
 

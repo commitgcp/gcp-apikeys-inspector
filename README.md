@@ -20,6 +20,12 @@ This repo uses one agent entrypoint: the Gemini CLI project command
 gemini
 ```
 
+If Gemini asks whether to trust this workspace, approve it. In a trusted Cloud
+Shell workspace, the command can use Cloud Shell's already-authenticated gcloud
+session as the signed-in user. If the workspace is not trusted, Gemini may not be
+able to use that session and the user may be forced through a separate `gcloud`
+login flow.
+
 Then, inside Gemini CLI:
 
 ```text
@@ -41,7 +47,9 @@ If Gemini was already open before you pulled these files:
 
 ## Cloud Shell
 
-Use the Open in Cloud Shell button above. The tutorial only asks you to run:
+Use the Open in Cloud Shell button above. When Gemini asks whether to trust the
+workspace, approve it so the command can use Cloud Shell's already-authenticated
+gcloud session. The tutorial only asks you to run:
 
 ```bash
 gemini
