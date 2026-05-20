@@ -79,5 +79,5 @@ Inspect the HTML report in Cloud Shell with the Web Preview menu in the
 top-right toolbar. Choose `Preview on port 8080` when Gemini used port `8080`;
 otherwise choose `Change port` and enter the port Gemini printed.
 
-![Cloud Shell Web Preview menu](cloudshell/assets/web-preview.png)
+![Cloud Shell Web Preview menu](https://github.com/commitgcp/gcp-apikeys-inspector/blob/main/cloudshell/assets/web-preview.png?raw=true)
 
