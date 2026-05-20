@@ -100,6 +100,35 @@ discover_candidates() {
   done < <(gcloud projects list --filter="lifecycleState=ACTIVE" --format="value(projectId)" --limit=50 2>/dev/null || true)
 }
 
+stop_preview_servers() {
+  local pid_file
+  local pid
+  local port
+  local pids
+  local command
+
+  for pid_file in reports/web-preview-*.pid; do
+    [ -e "$pid_file" ] || continue
+    pid="$(cat "$pid_file" 2>/dev/null || true)"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+    fi
+    rm -f "$pid_file"
+  done
+
+  for port in $(seq 8080 8099); do
+    pids="$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)"
+    for pid in $pids; do
+      command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+      case "$command" in
+        *"python"*"-m http.server"*)
+          kill "$pid" 2>/dev/null || true
+          ;;
+      esac
+    done
+  done
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --organization | --org)
@@ -334,6 +363,10 @@ if [ "$SCAN_STATUS" != "0" ] && [ "$SCAN_STATUS" != "1" ]; then
   exit "$SCAN_STATUS"
 fi
 
+stop_preview_servers
+
+sleep 1
+
 PORT=""
 for candidate in $(seq 8080 8099); do
   if ! lsof -iTCP:"$candidate" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -347,8 +380,19 @@ if [ -z "$PORT" ]; then
   exit 2
 fi
 
-nohup python3 -m http.server "$PORT" --directory reports > "reports/web-preview-${PORT}.log" 2>&1 &
-echo $! > "reports/web-preview-${PORT}.pid"
+(
+  cd reports
+  nohup python3 -m http.server "$PORT" > "web-preview-${PORT}.log" 2>&1 &
+  echo $! > "web-preview-${PORT}.pid"
+)
+
+PREVIEW_PID="$(cat "reports/web-preview-${PORT}.pid")"
+sleep 1
+if ! kill -0 "$PREVIEW_PID" 2>/dev/null; then
+  echo "Could not start Cloud Shell Web Preview on port $PORT." >&2
+  echo "Preview log: reports/web-preview-${PORT}.log" >&2
+  exit 2
+fi
 
 python3 - "$JSON_REPORT" <<'PY'
 import json

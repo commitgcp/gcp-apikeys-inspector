@@ -63,11 +63,16 @@ Then run `/gcp-api-keys-discover` again.
 Gemini starts a local web server rooted at `reports/`, so Cloud Shell Web Preview
 opens the HTML report directly instead of showing the repository directory.
 
-You are still inside Gemini CLI after report generation. Prefix shell commands
-with `!`. Download the files to your local machine:
+You are still inside Gemini CLI after report generation. Exit Gemini first:
 
 ```text
-! cloudshell download reports/index.html reports/report.json
+/quit
+```
+
+Then download the files from the Cloud Shell terminal:
+
+```bash
+cloudshell download reports/index.html reports/report.json
 ```
 
 Inspect the HTML report in Cloud Shell with the Web Preview menu in the

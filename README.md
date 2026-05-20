@@ -81,11 +81,16 @@ Then:
 
 After the report is generated, Gemini starts a local web server rooted at
 `reports/`, so Cloud Shell Web Preview opens the HTML report directly instead of
-showing the repository directory. If you are still inside Gemini CLI, prefix
-shell commands with `!`. Download the files with:
+showing the repository directory.
 
 ```text
-! cloudshell download reports/index.html reports/report.json
+/quit
+```
+
+Then download the files from the Cloud Shell terminal:
+
+```bash
+cloudshell download reports/index.html reports/report.json
 ```
 
 Or inspect the HTML report with Cloud Shell Web Preview using the port Gemini

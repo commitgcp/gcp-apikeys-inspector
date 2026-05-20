@@ -105,11 +105,15 @@ Tell the user to use the Cloud Shell Web Preview menu:
 - choose `Preview on port 8080` if `PORT=8080`
 - otherwise choose `Change port` and enter the printed port
 
-For download commands shown while the user is still inside Gemini CLI, prefix the
-shell command with `!`, for example:
+For downloads, tell the user to exit Gemini first, then run the Cloud Shell
+command outside Gemini CLI:
 
 ```text
-! cloudshell download reports/index.html reports/report.json
+/quit
+```
+
+```bash
+cloudshell download reports/index.html reports/report.json
 ```
 
 End with a concise summary of the run, risks, report paths, and preview/download
