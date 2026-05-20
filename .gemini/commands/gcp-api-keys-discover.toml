@@ -10,17 +10,74 @@ User-provided command args:
 
 {{args}}
 
-## Inputs
+## Input Discovery
 
-Use command args if they include an organization ID and quota project. Otherwise
-ask the user for:
+Be proactive. Do not start with an interactive "Answer Questions" form, and do
+not ask for `ORG_ID` or `QUOTA_PROJECT` until the discovery steps below fail to
+produce a single usable value. Run read-only shell commands first, explain what
+was discovered, and only ask the user when there are multiple plausible choices
+or no usable choices.
 
-- Google Cloud organization ID (`ORG_ID`), numeric or `organizations/<id>`.
-- quota project (`QUOTA_PROJECT`) for Cloud Asset Inventory API calls.
+Use command args first if they include an organization ID and quota project.
+Accept an organization as either a bare number or `organizations/<id>`. Accept a
+quota project from `--project`, `--quota-project`, `project=...`, or
+`quota_project=...` style args.
 
-If quota project is missing, inspect `gcloud config get-value project`, then ask
-the user to confirm before using it. Do not run cloud commands until both values
-are known.
+If values are missing, gather local Google Cloud context:
+
+```bash
+gcloud auth list --filter="status:ACTIVE" --format="value(account)"
+gcloud config get-value project 2>/dev/null || true
+gcloud config get-value billing/quota_project 2>/dev/null || true
+python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+for name in ("GOOGLE_CLOUD_PROJECT", "CLOUDSDK_CORE_PROJECT", "DEVSHELL_PROJECT_ID", "GCLOUD_PROJECT"):
+    value = os.environ.get(name)
+    if value:
+        print(f"{name}={value}")
+
+adc = Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
+if adc.exists():
+    try:
+        quota_project = json.loads(adc.read_text()).get("quota_project_id")
+    except Exception:
+        quota_project = None
+    if quota_project:
+        print(f"ADC_QUOTA_PROJECT={quota_project}")
+PY
+```
+
+Treat blank output, `(unset)`, and command warnings as no value. If there is no
+active gcloud account, run `gcloud auth login` before continuing with organization
+or project discovery.
+
+Choose `QUOTA_PROJECT` in this order when present: command args, active gcloud
+project, gcloud billing quota project, ADC quota project, Cloud Shell/project
+environment variables. If exactly one candidate exists, use it without asking.
+If candidates disagree, prefer the active gcloud project when it is set; otherwise
+prefer the ADC quota project. State the source you selected.
+
+Resolve `ORG_ID` without asking whenever possible:
+
+1. If command args include an organization, use it.
+2. Run `gcloud organizations list --format="value(name,displayName)"`. If it
+   returns exactly one organization, use that organization ID.
+3. If `QUOTA_PROJECT` is known, run
+   `gcloud projects get-ancestors "$QUOTA_PROJECT" --format="value(type,id)"`
+   and use the ancestor whose type is `organization` or `ORGANIZATION`.
+4. If `QUOTA_PROJECT` is still unknown or has no visible organization ancestor,
+   run `gcloud projects list --filter="lifecycleState=ACTIVE" --format="value(projectId)" --limit=25`.
+   For each returned project, inspect ancestors with `gcloud projects get-ancestors`.
+   If all visible projects point to a single organization, use that organization
+   and use one of those projects as `QUOTA_PROJECT` if no quota project was found.
+
+Only ask the user after the above discovery if there are multiple organizations,
+multiple equally plausible quota projects, or no accessible project/organization
+signals. When asking, present the exact discovered candidates and the command
+that produced them.
 
 Normalize `organizations/<id>` to `<id>` for output filenames.
 
@@ -34,7 +91,7 @@ Explain missing access without attempting IAM grants. Required:
 
 ## Authentication And Validation
 
-Run these steps in order:
+Run these steps in order after input discovery:
 
 1. Check active gcloud account:
    `gcloud auth list --filter="status:ACTIVE" --format="value(account)"`
@@ -47,7 +104,7 @@ Run these steps in order:
    `gcloud config set project "$QUOTA_PROJECT"`
 6. Check Cloud Asset Inventory API:
    `gcloud services list --enabled --project "$QUOTA_PROJECT" --filter="config.name=cloudasset.googleapis.com" --format="value(config.name)"`
-7. If the API is disabled, ask for confirmation and run:
+7. If the API is disabled, state the selected quota project and run:
    `gcloud services enable cloudasset.googleapis.com --project "$QUOTA_PROJECT"`
 8. Validate org scan access:
    `gcloud asset search-all-resources --scope="organizations/$ORG_ID" --asset-types="apikeys.googleapis.com/Key" --limit=1 --billing-project="$QUOTA_PROJECT" --format="table(name,assetType,project)"`
@@ -94,10 +151,8 @@ and restrictions only.
 
 ## Preview Or Download
 
-Ask whether the user wants to preview the HTML report in Cloud Shell.
-
-If yes, start a background server from the repository root using the first free
-port from 8080-8084:
+After generating the report, proactively start a background preview server from
+the repository root using the first free port from 8080-8084:
 
 ```bash
 PORT=""
@@ -118,7 +173,7 @@ Tell the user to use the Cloud Shell Web Preview menu:
 - choose `Preview on port 8080` if `PORT=8080`
 - otherwise choose `Change port` and enter the printed port
 
-If the user wants local files, provide:
+Also provide the download command for local files:
 
 ```bash
 cloudshell download "<html-report-path>" "<json-report-path>"

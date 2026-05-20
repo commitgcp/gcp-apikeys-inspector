@@ -26,9 +26,12 @@ Then, inside Gemini CLI:
 /gcp-api-keys-discover
 ```
 
-The command asks for the organization ID and quota project, validates Google
-Cloud auth and Cloud Asset Inventory access, runs the scanner, explains the
-findings, and offers to start Cloud Shell Web Preview for the HTML report.
+The command first tries to discover the organization ID and quota project from
+Gemini command args, gcloud config, ADC quota project settings, Cloud Shell
+environment variables, visible organizations, and project ancestors. It asks for
+input only when discovery is ambiguous or no usable value is visible. Then it
+validates Google Cloud auth and Cloud Asset Inventory access, runs the scanner,
+explains the findings, and starts Cloud Shell Web Preview for the HTML report.
 
 If Gemini was already open before you pulled these files:
 
