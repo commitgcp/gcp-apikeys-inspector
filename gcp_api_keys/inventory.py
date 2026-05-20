@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
+from google.auth.credentials import Credentials
 from google.api_core import exceptions as gax
 from google.cloud import asset_v1
 from google.protobuf import field_mask_pb2
@@ -17,13 +18,13 @@ class InventoryError(RuntimeError):
     """Raised when Cloud Asset Inventory cannot be queried."""
 
 
-def iter_api_keys(org_id: str) -> Iterator[dict[str, Any]]:
+def iter_api_keys(org_id: str, credentials: Credentials | None = None) -> Iterator[dict[str, Any]]:
     """Yield every API Key under `organizations/{org_id}` as a plain dict.
 
     Each yielded dict matches the ResourceSearchResult proto with `versionedResources`
     populated so the caller has the full Key payload (restrictions, etc.).
     """
-    client = asset_v1.AssetServiceClient()
+    client = asset_v1.AssetServiceClient(credentials=credentials)
     request = asset_v1.SearchAllResourcesRequest(
         scope=f"organizations/{org_id}",
         asset_types=[API_KEY_ASSET_TYPE],

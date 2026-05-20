@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from gcp_api_keys import __version__
+from gcp_api_keys.auth import AuthError, load_credentials
 from gcp_api_keys.inventory import InventoryError, iter_api_keys
 from gcp_api_keys.models import ApiKey, OrgMeta
 from gcp_api_keys.projects import ProjectResolver, fetch_org_display_name
@@ -83,6 +84,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Optional path to write sanitized machine-readable report data.",
     )
     parser.add_argument(
+        "--quota-project",
+        help=(
+            "Project used for user-project quota/billing headers. Recommended "
+            "when using user credentials."
+        ),
+    )
+    parser.add_argument(
+        "--use-gcloud-auth",
+        action="store_true",
+        help=(
+            "Use the active gcloud account access token instead of Application "
+            "Default Credentials. Useful in Cloud Shell."
+        ),
+    )
+    parser.add_argument(
         "--no-resolve-projects",
         action="store_true",
         help="Skip Resource Manager calls. Faster but loses project displayName.",
@@ -102,13 +118,26 @@ def main(argv: list[str] | None = None) -> int:
         org_id = org_id.split("/", 1)[1]
 
     print(f"Scanning organizations/{org_id} for API keys via Cloud Asset Inventory…", file=sys.stderr)
+    if args.use_gcloud_auth:
+        print("Using active gcloud account credentials.", file=sys.stderr)
+    if args.quota_project:
+        print(f"Using quota project: {args.quota_project}", file=sys.stderr)
 
-    resolver = _NoopResolver() if args.no_resolve_projects else ProjectResolver()
+    try:
+        credentials = load_credentials(
+            quota_project=args.quota_project,
+            use_gcloud_auth=args.use_gcloud_auth,
+        )
+    except AuthError as exc:
+        print(f"\nerror: {exc}", file=sys.stderr)
+        return 2
+
+    resolver = _NoopResolver() if args.no_resolve_projects else ProjectResolver(credentials=credentials)
 
     keys: list[ApiKey] = []
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "INFO": 0, "OK": 0, "deleted": 0}
     try:
-        for result in iter_api_keys(org_id):
+        for result in iter_api_keys(org_id, credentials=credentials):
             key = _to_api_key(result, resolver)
             classify(key)
             keys.append(key)
@@ -126,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
 
     org_meta = OrgMeta(
         org_id=org_id,
-        display_name=None if args.no_resolve_projects else fetch_org_display_name(org_id),
+        display_name=None if args.no_resolve_projects else fetch_org_display_name(org_id, credentials=credentials),
         scan_time_utc=dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
         tool_version=__version__,
     )

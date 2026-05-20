@@ -21,11 +21,11 @@ Inside Gemini CLI, run:
 /gcp-api-keys-discover
 ```
 
-The command first tries to discover the organization ID and quota project from
-gcloud, ADC, Cloud Shell environment variables, visible organizations, and
-project ancestors. It asks for input only when discovery is ambiguous or no
-usable value is visible. Then it validates Google Cloud access, generates the
-report, explains the findings, and starts Cloud Shell Web Preview.
+The command runs the repository's deterministic Cloud Shell script. The script
+discovers the organization ID and quota project from gcloud, Cloud Shell
+environment variables, visible organizations, and project ancestors. It uses the
+already-authenticated active gcloud account and does not run `gcloud auth
+application-default login`.
 
 If the command is not visible, run:
 

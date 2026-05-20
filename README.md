@@ -26,12 +26,11 @@ Then, inside Gemini CLI:
 /gcp-api-keys-discover
 ```
 
-The command first tries to discover the organization ID and quota project from
-Gemini command args, gcloud config, ADC quota project settings, Cloud Shell
-environment variables, visible organizations, and project ancestors. It asks for
-input only when discovery is ambiguous or no usable value is visible. Then it
-validates Google Cloud auth and Cloud Asset Inventory access, runs the scanner,
-explains the findings, and starts Cloud Shell Web Preview for the HTML report.
+The command delegates to `scripts/gcp-api-keys-discover.sh`, which discovers the
+organization ID and quota project from args, gcloud config, Cloud Shell
+environment variables, visible organizations, and project ancestors. In Cloud
+Shell it uses the already-authenticated active gcloud account; it does not run
+`gcloud auth application-default login`.
 
 If Gemini was already open before you pulled these files:
 
@@ -81,12 +80,33 @@ gcloud services enable cloudasset.googleapis.com --project <QUOTA_PROJECT>
 
 ## Manual Run
 
+From an authenticated Cloud Shell or gcloud session:
+
+```bash
+scripts/gcp-api-keys-discover.sh
+```
+
+Or run the Python scanner directly with the active gcloud account:
+
+```bash
+uv sync
+uv run python discover.py \
+  --organization <ORG_ID> \
+  --quota-project <QUOTA_PROJECT> \
+  --use-gcloud-auth \
+  --output report.html \
+  --json-output report.json
+```
+
+For local runs that use Application Default Credentials instead:
+
 ```bash
 uv sync
 gcloud auth application-default login
 gcloud auth application-default set-quota-project <QUOTA_PROJECT>
 uv run python discover.py \
   --organization <ORG_ID> \
+  --quota-project <QUOTA_PROJECT> \
   --output report.html \
   --json-output report.json
 ```
@@ -112,6 +132,7 @@ Exit codes:
 ```text
 discover.py
 gcp_api_keys/
+scripts/gcp-api-keys-discover.sh
 templates/report.html.j2
 assets/commit-logo-*.png
 .gemini/commands/gcp-api-keys-discover.toml

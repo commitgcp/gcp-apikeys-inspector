@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from google.api_core import exceptions as gax
+from google.auth.credentials import Credentials
 from google.cloud import resourcemanager_v3
 
 from .models import ProjectInfo
 
 
 class ProjectResolver:
-    def __init__(self) -> None:
-        self._client = resourcemanager_v3.ProjectsClient()
+    def __init__(self, credentials: Credentials | None = None) -> None:
+        self._client = resourcemanager_v3.ProjectsClient(credentials=credentials)
         self._cache: dict[str, ProjectInfo] = {}
 
     def resolve(self, project_number: str | None, project_id: str | None) -> ProjectInfo:
@@ -42,10 +43,10 @@ class ProjectResolver:
         return info
 
 
-def fetch_org_display_name(org_id: str) -> str | None:
+def fetch_org_display_name(org_id: str, credentials: Credentials | None = None) -> str | None:
     """Best-effort lookup of organization displayName. Returns None on any error."""
     try:
-        client = resourcemanager_v3.OrganizationsClient()
+        client = resourcemanager_v3.OrganizationsClient(credentials=credentials)
         org = client.get_organization(name=f"organizations/{org_id}")
         return org.display_name or None
     except gax.GoogleAPICallError:

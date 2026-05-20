@@ -10,126 +10,38 @@ User-provided command args:
 
 {{args}}
 
-## Input Discovery
+## Run The Workflow
 
-Be proactive. Do not start with an interactive "Answer Questions" form, and do
-not ask for `ORG_ID` or `QUOTA_PROJECT` until the discovery steps below fail to
-produce a single usable value. Run read-only shell commands first, explain what
-was discovered, and only ask the user when there are multiple plausible choices
-or no usable choices.
+Do not perform manual input discovery, do not open an "Answer Questions" form,
+and do not run any `gcloud auth application-default ...` command. Cloud Shell is
+already authenticated through the active gcloud account; Application Default
+Credentials are a separate credential store and are not required by this command.
 
-Use command args first if they include an organization ID and quota project.
-Accept an organization as either a bare number or `organizations/<id>`. Accept a
-quota project from `--project`, `--quota-project`, `project=...`, or
-`quota_project=...` style args.
-
-If values are missing, gather local Google Cloud context:
+Run the deterministic repository script exactly once, passing through user args:
 
 ```bash
-gcloud auth list --filter="status:ACTIVE" --format="value(account)"
-gcloud config get-value project 2>/dev/null || true
-gcloud config get-value billing/quota_project 2>/dev/null || true
-python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-
-for name in ("GOOGLE_CLOUD_PROJECT", "CLOUDSDK_CORE_PROJECT", "DEVSHELL_PROJECT_ID", "GCLOUD_PROJECT"):
-    value = os.environ.get(name)
-    if value:
-        print(f"{name}={value}")
-
-adc = Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
-if adc.exists():
-    try:
-        quota_project = json.loads(adc.read_text()).get("quota_project_id")
-    except Exception:
-        quota_project = None
-    if quota_project:
-        print(f"ADC_QUOTA_PROJECT={quota_project}")
-PY
+scripts/gcp-api-keys-discover.sh {{args}}
 ```
 
-Treat blank output, `(unset)`, and command warnings as no value. If there is no
-active gcloud account, run `gcloud auth login` before continuing with organization
-or project discovery.
+The script handles all input discovery, validation, report generation, and Cloud
+Shell preview startup. It intentionally filters placeholder project values such
+as `(unset)` and `CURRENT_PROJECT`, discovers the organization through project
+ancestors when possible, and uses `gcloud auth print-access-token` for the
+scanner instead of ADC.
 
-Choose `QUOTA_PROJECT` in this order when present: command args, active gcloud
-project, gcloud billing quota project, ADC quota project, Cloud Shell/project
-environment variables. If exactly one candidate exists, use it without asking.
-If candidates disagree, prefer the active gcloud project when it is set; otherwise
-prefer the ADC quota project. State the source you selected.
+If the script exits `2`, report the exact blocker and retry command it printed.
+If the script exits `0`, treat the report generation as successful and use the
+printed scanner status to distinguish CRITICAL findings from a clean run.
 
-Resolve `ORG_ID` without asking whenever possible:
-
-1. If command args include an organization, use it.
-2. Run `gcloud organizations list --format="value(name,displayName)"`. If it
-   returns exactly one organization, use that organization ID.
-3. If `QUOTA_PROJECT` is known, run
-   `gcloud projects get-ancestors "$QUOTA_PROJECT" --format="value(type,id)"`
-   and use the ancestor whose type is `organization` or `ORGANIZATION`.
-4. If `QUOTA_PROJECT` is still unknown or has no visible organization ancestor,
-   run `gcloud projects list --filter="lifecycleState=ACTIVE" --format="value(projectId)" --limit=25`.
-   For each returned project, inspect ancestors with `gcloud projects get-ancestors`.
-   If all visible projects point to a single organization, use that organization
-   and use one of those projects as `QUOTA_PROJECT` if no quota project was found.
-
-Only ask the user after the above discovery if there are multiple organizations,
-multiple equally plausible quota projects, or no accessible project/organization
-signals. When asking, present the exact discovered candidates and the command
-that produced them.
-
-Normalize `organizations/<id>` to `<id>` for output filenames.
-
-## Access Required
-
-Explain missing access without attempting IAM grants. Required:
+Required access if the script reports a permission blocker:
 
 - `roles/cloudasset.viewer` or `cloudasset.assets.searchAllResources` on the organization.
 - `roles/serviceusage.serviceUsageConsumer` or `serviceusage.services.use` on the quota project.
 - Optional for display names: `roles/browser` or equivalent Resource Manager read access.
 
-## Authentication And Validation
+Script exit code handling:
 
-Run these steps in order after input discovery:
-
-1. Check active gcloud account:
-   `gcloud auth list --filter="status:ACTIVE" --format="value(account)"`
-2. If there is no active account, run `gcloud auth login`.
-3. Check ADC:
-   `gcloud auth application-default print-access-token >/dev/null`
-4. If ADC is missing or invalid, run `gcloud auth application-default login`.
-5. Configure quota/project:
-   `gcloud auth application-default set-quota-project "$QUOTA_PROJECT"`
-   `gcloud config set project "$QUOTA_PROJECT"`
-6. Check Cloud Asset Inventory API:
-   `gcloud services list --enabled --project "$QUOTA_PROJECT" --filter="config.name=cloudasset.googleapis.com" --format="value(config.name)"`
-7. If the API is disabled, state the selected quota project and run:
-   `gcloud services enable cloudasset.googleapis.com --project "$QUOTA_PROJECT"`
-8. Validate org scan access:
-   `gcloud asset search-all-resources --scope="organizations/$ORG_ID" --asset-types="apikeys.googleapis.com/Key" --limit=1 --billing-project="$QUOTA_PROJECT" --format="table(name,assetType,project)"`
-
-No rows is valid. Permission, quota, invalid organization, or API-enablement
-errors must be resolved before the full scan.
-
-## Generate Report
-
-Run:
-
-```bash
-uv sync
-mkdir -p reports
-RUN_ID="$(date -u +%Y%m%d-%H%M%S)"
-uv run python discover.py \
-  --organization "$ORG_ID" \
-  --output "reports/api-keys-${ORG_ID}-${RUN_ID}.html" \
-  --json-output "reports/api-keys-${ORG_ID}-${RUN_ID}.json"
-```
-
-Exit code handling:
-
-- `0`: scan completed without CRITICAL active-key findings.
-- `1`: scan completed and found CRITICAL findings; treat as successful report generation with urgent remediation.
+- `0`: report generated successfully; scanner status in output says whether CRITICAL findings exist.
 - `2`: scan failed; explain the blocker.
 
 ## Explain Results
@@ -151,33 +63,11 @@ and restrictions only.
 
 ## Preview Or Download
 
-After generating the report, proactively start a background preview server from
-the repository root using the first free port from 8080-8084:
-
-```bash
-PORT=""
-for candidate in 8080 8081 8082 8083 8084; do
-  if ! lsof -iTCP:"$candidate" -sTCP:LISTEN >/dev/null 2>&1; then
-    PORT="$candidate"
-    break
-  fi
-done
-test -n "$PORT"
-nohup python3 -m http.server "$PORT" > "reports/web-preview-${PORT}.log" 2>&1 &
-echo $! > "reports/web-preview-${PORT}.pid"
-echo "$PORT"
-```
-
+Use the script output for report paths, preview port, and download command.
 Tell the user to use the Cloud Shell Web Preview menu:
 
 - choose `Preview on port 8080` if `PORT=8080`
 - otherwise choose `Change port` and enter the printed port
-
-Also provide the download command for local files:
-
-```bash
-cloudshell download "<html-report-path>" "<json-report-path>"
-```
 
 End with a concise summary of the run, risks, report paths, and preview/download
 instructions.

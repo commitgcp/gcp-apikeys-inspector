@@ -19,4 +19,4 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["gcp_api_keys"]
-include = ["discover.py", "templates/*.j2", "assets/*.png"]
+include = ["discover.py", "templates/*.j2", "assets/*.png", "scripts/*.sh"]
